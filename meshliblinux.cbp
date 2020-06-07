@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="meshlib" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Build>
+			<Target title="Debug">
+				<Option output="libmeshlib" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="" />
+				<Option object_output="obj/Debug/" />
+				<Option type="2" />
+				<Option compiler="gcc" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-Wall" />
+					<Add option="-g" />
+				</Compiler>
+				<Linker>
+					<Add option="-lopengl32 -lglu32" />
+				</Linker>
+			</Target>
+			<Target title="Release">
+				<Option output="libmeshlib" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="" />
+				<Option object_output="obj/Release/" />
+				<Option type="2" />
+				<Option compiler="gcc" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-march=core2" />
+					<Add option="-O2" />
+					<Add option="-Wall" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+					<Add option="-lopengl32 -lglu32" />
+				</Linker>
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-Wlong-long" />
+			<Add option="-fopenmp" />
+			<Add option="-fPIC" />
+		</Compiler>
+		<Linker>
+			<Add option="-lopengl32 -lglu32" />
+			<Add option="-fopenmp" />
+			<Add option="-fPIC" />
+		</Linker>
+		<Unit filename="include/meshlib.h" />
+		<Unit filename="resources/resource.rc">
+			<Option compilerVar="WINDRES" />
+		</Unit>
+		<Unit filename="src/meshcalc.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/meshclean.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/meshcreate.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/meshdraw.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/mesherror.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/meshfilter.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/meshload.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/meshops.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/meshtext.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/meshtransform.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/meshwrite.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Extensions>
+			<code_completion />
+			<debugger />
+			<envvars />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>

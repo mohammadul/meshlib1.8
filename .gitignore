@@ -1,0 +1,12 @@
+*.obj
+*.o
+*.res
+*.sdf
+*.suo
+*.layout
+*.depend
+*.idb
+*.pdb
+*.tlog
+*.log
+*.lastbuildstate
