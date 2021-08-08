@@ -1,3 +1,4 @@
+![](https://repository-images.githubusercontent.com/13704113/03ef1900-929e-11e9-938f-45459b11552d)
 ![](https://raw.githubusercontent.com/mohammadul/meshlib/master/resources/meshlib.png)   
 Meshlib [![Build Status](https://travis-ci.org/mohammadul/meshlib.svg?branch=master)](https://travis-ci.org/mohammadul/meshlib)
 =======
