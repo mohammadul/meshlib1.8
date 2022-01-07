@@ -7,7 +7,7 @@
 		<Option compiler="gcc" />
 		<Build>
 			<Target title="Debug">
-				<Option output="libmeshlib" prefix_auto="1" extension_auto="1" />
+				<Option output="meshlib" prefix_auto="1" extension_auto="1" />
 				<Option working_dir="" />
 				<Option object_output="obj/Debug/" />
 				<Option type="2" />
@@ -18,11 +18,11 @@
 					<Add option="-g" />
 				</Compiler>
 				<Linker>
-					<Add option="-lopengl32 -lglu32" />
+					<Add option="-lGL -lglu32" />
 				</Linker>
 			</Target>
 			<Target title="Release">
-				<Option output="libmeshlib" prefix_auto="1" extension_auto="1" />
+				<Option output="meshlib" prefix_auto="1" extension_auto="1" />
 				<Option working_dir="" />
 				<Option object_output="obj/Release/" />
 				<Option type="2" />
@@ -35,11 +35,12 @@
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
-					<Add option="-lopengl32 -lglu32" />
+					<Add option="-lGL -lglu32" />
 				</Linker>
 			</Target>
 		</Build>
 		<Compiler>
+			<Add option="-march=corei7-avx" />
 			<Add option="-Wlong-long" />
 			<Add option="-fopenmp" />
 			<Add option="-fPIC" />
@@ -77,13 +78,16 @@
 		<Unit filename="src/meshops.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="src/meshrand.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/meshsave.c">
+			<Option compilerVar="CC" />
+		</Unit>
 		<Unit filename="src/meshtext.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/meshtransform.c">
-			<Option compilerVar="CC" />
-		</Unit>
-		<Unit filename="src/meshwrite.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Extensions>

@@ -1,9 +1,12 @@
+#ifndef HEADER_BC297A1C5F3E1461
+#define HEADER_BC297A1C5F3E1461
+
 /**
  * @file meshlib.h
  * @author Sk. Mohammadul Haque
- * @version 1.4.2.0
+ * @version 1.8.0.0
  * @copyright
- * Copyright (c) 2013, 2014, 2015, 2016 Sk. Mohammadul Haque.
+ * Copyright (c) 2013-2021 Sk. Mohammadul Haque.
  * @brief This header file contains declarations of all functions of meshlib.
  */
 
@@ -11,34 +14,6 @@
 #define __MESHLIB__
 
 #define _CRT_SECURE_NO_DEPRECATE
-
-/*! \mainpage Meshlib
- *
- * \section intro_sec Introduction
- * Meshlib is a simple mesh library written in C.
- *
- * \section build_sec Build
- * To build the whole project, Code::blocks is required.
- *
- * \section content_sec Contents
- * Load/Write PLY, OFF, ASC files.
- *
- * Basic Vertex Manipulations.
- *
- * Basic Vertex Transformations.
- *
- * Basic Face Manipulations.
- *
- * Bilateral Filtering.
- *
- * Laplacian Filtering.
- *
- * Mesh Cleaning Algorithms.
- *
- *
- */
-
-
 
 #ifdef __cplusplus
 #define __MESH__CPP__
@@ -52,6 +27,7 @@ extern "C"
 #include <stdlib.h>
 #include <ctype.h>
 #include <math.h>
+#include <float.h>
 #define MESHLIBAPI  extern
 
 #if defined (GCC) || defined (__GNUC__)
@@ -61,19 +37,27 @@ typedef struct _iobuf *FILEPOINTER; /**< File pointer */
 #endif
 
 
-#define MESH_INTDATA_TYPE 0 /**< Integer datatype selector */
+#define MESH_INTDATA_TYPE 1 /**< Integer datatype selector */
 #define MESH_FLOATDATA_TYPE 1 /**< Float datatype selector */
 
 #if MESH_INTDATA_TYPE==0
 #define INTDATA int32_t /* do not change this, careful see meshload fscanf and other functions */ /**< Integer datatype */
+#define MESH_INTDATA_MIN (INT32_MIN) /**< Integer datatype minimum */
+#define MESH_INTDATA_MAX (INT32_MAX) /**< Integer datatype maximum */
 #else
 #define INTDATA int64_t /* do not change this, careful see meshload fscanf and other functions */ /**< Integer datatype */
+#define MESH_INTDATA_MIN (INT64_MIN) /**< Integer datatype minimum */
+#define MESH_INTDATA_MAX (INT64_MAX) /**< Integer datatype maximum */
 #endif
 
 #if MESH_FLOATDATA_TYPE==0
 #define FLOATDATA float /* do not change this, careful see meshload fscanf and other functions */ /**< Float datatype */
+#define MESH_FLOATDATA_MIN (FLT_MIN) /**< Float datatype minimum */
+#define MESH_FLOATDATA_MAX (FLT_MAX) /**< Float datatype maximum */
 #else
 #define FLOATDATA double /* do not change this, careful see meshload fscanf and other functions */ /**< Float datatype */
+#define MESH_FLOATDATA_MIN (DBL_MIN) /**< Float datatype minimum */
+#define MESH_FLOATDATA_MAX (DBL_MAX) /**< Float datatype maximum */
 #endif
 
 #define MESH_ORIGIN_TYPE_BUILD 00 /**< Mesh origin type - create new */
@@ -89,6 +73,11 @@ typedef struct _iobuf *FILEPOINTER; /**< File pointer */
 #define MESH_ORIGIN_TYPE_PLY_BINARY_LITTLE_ENDIAN 31 /**< Mesh origin type - PLY binary LE file */
 #define MESH_ORIGIN_TYPE_PLY_BINARY_BIG_ENDIAN 32 /**< Mesh origin type - PLY binary BE file */
 
+#define MESH_ORIGIN_TYPE_BINV1 40 /**< Mesh origin type - CloudCompare BINv1file */
+#define MESH_ORIGIN_TYPE_BUNDLE_OUT 50 /**< Mesh origin type - Bundle OUT file */
+#define MESH_ORIGIN_TYPE_NVM 60 /**< Mesh origin type - NVM file */
+#define MESH_ORIGIN_TYPE_BINCOLMAP 70 /**< Mesh origin type - COLMAP BIN file */
+
 #define MESH_ERR_MALLOC 0 /**< Mesh error type - allocation */
 #define MESH_ERR_SIZE_MISMATCH 1 /**< Mesh error type - size mismatch */
 #define MESH_ERR_FNOTOPEN 2 /**< Mesh error type - file open */
@@ -98,41 +87,108 @@ typedef struct _iobuf *FILEPOINTER; /**< File pointer */
 #define MESH_PI (3.14159265359) /**< \f$ \pi \f$ */
 #define MESH_TWOPI (6.28318530718) /**< \f$ 2\pi \f$ */
 
-
-#define MESH_CLONE_VERTICES (0x01) /**< Clone mesh vertices */
+/* 0xABCD, A3&D are vertices, B&C are faces,  */
+#define MESH_PROPS_VERTICES (0x01) /**< Mesh vertices */
 /** \cond HIDDEN_SYMBOLS */
-#define __MESH_CLONE_VNORMALS (0x02)
-#define __MESH_CLONE_VCOLORS (0x04)
-#define __MESH_CLONE_VFACES (0x08)
+#define __MESH_PROPS_VNORMALS (0x02)
+#define __MESH_PROPS_VCOLORS (0x04)
+#define __MESH_PROPS_VFACES (0x08)
+#define __MESH_PROPS_VSCALARS (0x4000)
 /** \endcond */
-#define MESH_CLONE_VNORMALS (MESH_CLONE_VERTICES | __MESH_CLONE_VNORMALS) /**< Clone mesh vertices and vertex normals */
-#define MESH_CLONE_VCOLORS (MESH_CLONE_VERTICES | __MESH_CLONE_VCOLORS) /**< Clone mesh vertices and vertex colors */
-#define MESH_CLONE_VFACES (MESH_CLONE_VERTICES | __MESH_CLONE_VFACES) /**< Clone mesh vertices and vertex face adjacency */
-#define MESH_CLONE_V_ALL_PROPS (0x0F) /**< Clone mesh all vertex properties */
+#define MESH_PROPS_VNORMALS (MESH_PROPS_VERTICES | __MESH_PROPS_VNORMALS) /**< Mesh vertices and vertex normals */
+#define MESH_PROPS_VCOLORS (MESH_PROPS_VERTICES | __MESH_PROPS_VCOLORS) /**< Mesh vertices and vertex colors */
+#define MESH_PROPS_VFACES (MESH_PROPS_VERTICES | __MESH_PROPS_VFACES) /**< Mesh vertices and vertex face adjacency */
+#define MESH_PROPS_VSCALARS (MESH_PROPS_VERTICES | __MESH_PROPS_VSCALARS) /**< Mesh vertices and vertex scalars */
+#define MESH_PROPS_V_ALL_PROPS (0xC00F) /**< Mesh all vertex properties */
 /** \cond HIDDEN_SYMBOLS */
-#define __MESH_CLONE_FACES (0x10)
-#define __MESH_CLONE_FNORMALS (0x20)
-#define __MESH_CLONE_FCOLORS (0x40)
-#define __MESH_CLONE_FAREAS (0x80)
-#define __MESH_CLONE_FFACES (0x100)
-#define __MESH_CLONE_F_ALL_PROPS (0xFF0)
+#define __MESH_PROPS_FACES (0x10)
+#define __MESH_PROPS_FNORMALS (0x20)
+#define __MESH_PROPS_FCOLORS (0x40)
+#define __MESH_PROPS_FAREAS (0x80)
+#define __MESH_PROPS_FFACES (0x100)
+#define __MESH_PROPS_FSCALARS (0x200)
+#define __MESH_PROPS_F_ALL_PROPS (0xFF0)
 
-#define __MESH_CLONE_EDGES (0x1000)
+#define __MESH_PROPS_EDGES (0x1000)
 
 /** \endcond */
-#define MESH_CLONE_FACES (MESH_CLONE_VERTICES | __MESH_CLONE_FACES) /**< Clone mesh faces */
-#define MESH_CLONE_FNORMALS (MESH_CLONE_FACES | __MESH_CLONE_FNORMALS) /**< Clone mesh faces and face normals */
-#define MESH_CLONE_FCOLORS (MESH_CLONE_FACES | __MESH_CLONE_FCOLORS) /**< Clone mesh faces and face colors */
-#define MESH_CLONE_FAREAS (MESH_CLONE_FACES | __MESH_CLONE_FAREAS) /**< Clone mesh faces and face areas */
-#define MESH_CLONE_FFACES (MESH_CLONE_FACES | __MESH_CLONE_FFACES) /**< Clone mesh faces and face face adjacency */
-#define MESH_CLONE_F_ALL_PROPS (MESH_CLONE_FACES | __MESH_CLONE_F_ALL_PROPS) /**< Clone mesh all face properties */
+#define MESH_PROPS_FACES (MESH_PROPS_VERTICES | __MESH_PROPS_FACES) /**< Mesh faces */
+#define MESH_PROPS_FNORMALS (MESH_PROPS_FACES | __MESH_PROPS_FNORMALS) /**< Mesh faces and face normals */
+#define MESH_PROPS_FCOLORS (MESH_PROPS_FACES | __MESH_PROPS_FCOLORS) /**< Mesh faces and face colors */
+#define MESH_PROPS_FAREAS (MESH_PROPS_FACES | __MESH_PROPS_FAREAS) /**< Mesh faces and face areas */
+#define MESH_PROPS_FFACES (MESH_PROPS_FACES | __MESH_PROPS_FFACES) /**< Mesh faces and face face adjacency */
+#define MESH_PROPS_FSCALARS (MESH_PROPS_FACES | __MESH_PROPS_FSCALARS) /**< Mesh vertices and face scalars */
+#define MESH_PROPS_F_ALL_PROPS (MESH_PROPS_FACES | __MESH_PROPS_F_ALL_PROPS) /**< Mesh all face properties */
 
-#define MESH_CLONE_EDGES (MESH_CLONE_VERTICES | __MESH_CLONE_FACES | __MESH_CLONE_EDGES) /**< Clone mesh edges */
-#define MESH_CLONE_ALL_PROPS (0xFFFF) /**< Clone mesh all properties */
+#define MESH_PROPS_EDGES (MESH_PROPS_VERTICES | __MESH_PROPS_FACES | __MESH_PROPS_EDGES) /**< Mesh edges */
+#define MESH_PROPS_ALL_PROPS (0xFFFF) /**< Mesh all properties */
 
+#define MESH_EPS20 (1e-20) /**< Large epsilon */
+#define MESH_EPS12 (1e-12) /**< Medium epsilon */
+#define MESH_EPS8 (1e-8) /**< Small epsilon */
+#if MESH_FLOATDATA_TYPE==0
+#define MESH_EPSM (FLT_EPSILON) /**< Machine epsilon */
+#else
+#define MESH_EPSM (DBL_EPSILON) /**< Machine epsilon */
+#endif
+
+#define MESH_MIN(a,b) (((a)<(b))?(a):(b)) /**< Minimum of two variables */
+#define MESH_MAX(a,b) (((a)>(b))?(a):(b)) /**< Maximum of two variables */
+
+/* deprecated macros below */
+/** \cond HIDDEN_SYMBOLS */
+/* 0xABCD, A3&D are vertices, B&C are faces,  */
+#define MESH_CLONE_VERTICES MESH_PROPS_VERTICES
+
+#define __MESH_CLONE_VNORMALS __MESH_PROPS_VNORMALS
+#define __MESH_CLONE_VCOLORS __MESH_PROPS_VCOLORS
+#define __MESH_CLONE_VFACES __MESH_PROPS_VFACES
+#define __MESH_CLONE_VSCALARS __MESH_PROPS_VSCALARS
+
+#define MESH_CLONE_VNORMALS MESH_PROPS_VNORMALS
+#define MESH_CLONE_VCOLORS MESH_PROPS_VCOLORS
+#define MESH_CLONE_VFACES MESH_PROPS_VFACES
+#define MESH_CLONE_VSCALARS MESH_PROPS_VSCALARS
+#define MESH_CLONE_V_ALL_PROPS MESH_PROPS_V_ALL_PROPS
+
+#define __MESH_CLONE_FACES __MESH_PROPS_FACES
+#define __MESH_CLONE_FNORMALS __MESH_PROPS_FNORMALS
+#define __MESH_CLONE_FCOLORS __MESH_PROPS_FCOLORS
+#define __MESH_CLONE_FAREAS __MESH_PROPS_FAREAS
+#define __MESH_CLONE_FFACES __MESH_PROPS_FFACES
+#define __MESH_CLONE_FSCALARS __MESH_PROPS_FSCALARS
+#define __MESH_CLONE_F_ALL_PROPS __MESH_PROPS_F_ALL_PROPS
+
+#define __MESH_CLONE_EDGES __MESH_PROPS_EDGES
+
+#define MESH_CLONE_FACES MESH_PROPS_FACES
+#define MESH_CLONE_FNORMALS MESH_PROPS_FNORMALS
+#define MESH_CLONE_FCOLORS MESH_PROPS_FCOLORS
+#define MESH_CLONE_FAREAS MESH_PROPS_FAREAS
+#define MESH_CLONE_FFACES MESH_PROPS_FFACES
+#define MESH_CLONE_FSCALARS MESH_PROPS_FSCALARS
+#define MESH_CLONE_F_ALL_PROPS MESH_PROPS_F_ALL_PROPS
+
+#define MESH_CLONE_EDGES MESH_PROPS_EDGES
+#define MESH_CLONE_ALL_PROPS MESH_PROPS_ALL_PROPS
+
+/** \endcond */
+
+#define MESH_ALIGN_GLOBAL_POSITION (0x01) /**< Mesh alignment global position */
+#define MESH_ALIGN_GLOBAL_ORIENTATION (0x02) /**< Mesh alignment global orientation */
+#define MESH_ALIGN_GLOBAL_SCALE (0x04) /**< Mesh alignment global scale */
+#define MESH_ALIGN_GLOBAL_ALL (0x07) /**< Mesh alignment all global properties */
+#define MESH_ALIGN_GLOBAL_DO_TRANSFORM (0x08) /**< Mesh alignment global do transform */
 
 typedef INTDATA INTDATA2[2]; /**< 2- element INTDATA */
 typedef INTDATA INTDATA3[3]; /**< 3- element INTDATA */
+
+typedef struct mesh_vector2
+{
+    FLOATDATA x; /**< x co-ordinate */
+    FLOATDATA y; /**< y co-ordinate */
+} mesh_vector2; /**< Generic 2-d vector */
+typedef mesh_vector2* MESH_VECTOR2; /**< Generic 2-d vector pointer */
 
 typedef struct mesh_vector3
 {
@@ -141,7 +197,6 @@ typedef struct mesh_vector3
     FLOATDATA z; /**< z co-ordinate */
 } mesh_vector3; /**< Generic 3-d vector */
 typedef mesh_vector3* MESH_VECTOR3; /**< Generic 3-d vector pointer */
-
 
 typedef mesh_vector3 mesh_vertex; /**< Vertex */
 typedef mesh_vertex* MESH_VERTEX; /**< Vertex pointer */
@@ -179,6 +234,8 @@ typedef struct mesh_struct3
 } mesh_struct3; /**< INTDATA3 Structure */
 typedef mesh_struct3* MESH_STRUCT3; /**< INTDATA3 Structure pointer */
 
+typedef FLOATDATA mesh_scalar; /**< Scalar */
+typedef mesh_scalar* MESH_SCALAR; /**< Pointer to Scalar */
 
 typedef struct mesh_face
 {
@@ -209,15 +266,18 @@ typedef mesh_fface* MESH_FFACE; /**< Pointer to face adjacent faces */
 
 typedef struct mesh_rotation
 {
-    FLOATDATA data[9]; /**< Matrix data */
+    FLOATDATA data[9]; /**< 3X3 Row-major matrix data */
 } mesh_rotation; /**< Rotation */
 typedef mesh_rotation* MESH_ROTATION; /**< Pointer to rotation */
 
-typedef struct mesh_transform
+typedef struct mesh_affine
 {
-    FLOATDATA *data; /**< Matrix data */
-} mesh_transform; /**< Transformation */
-typedef mesh_transform* MESH_TRANSFORM; /**< Pointer to transformation */
+    FLOATDATA data[12]; /**< 3X4 Row-major matrix data */
+} mesh_affine; /**< Affine transformation */
+typedef mesh_affine* MESH_AFFINE; /**< Pointer to affine transformation */
+
+typedef struct mesh_affine mesh_rigid; /**< Rigid transformation */
+typedef mesh_rigid* MESH_RIGID; /**< Pointer to rigid transformation */
 
 typedef struct mesh
 {
@@ -234,6 +294,8 @@ typedef struct mesh
     uint8_t is_vfaces; /**< Has vertex adjacent faces? */
     uint8_t is_ffaces; /**< Has face adjacent faces? */
     uint8_t is_fareas; /**< Has face areas? */
+    uint8_t is_vscalars; /**< Has vertex scalar field scalars? */
+    uint8_t is_fscalars; /**< Has face scalar field scalars? */
 
     INTDATA num_vertices; /**< Number of vertices */
     INTDATA num_faces; /**< Number of faces */
@@ -249,7 +311,9 @@ typedef struct mesh
 
     MESH_VFACE vfaces; /**< Pointer to vertex adjacent faces */
     MESH_FFACE ffaces; /**< Pointer to face adjacent faces */
-    FLOATDATA* fareas; /**< Pointer to face areas */
+    MESH_SCALAR fareas; /**< Pointer to face areas */
+    MESH_SCALAR vscalars; /**< Pointer to vertex scalar field scalars */
+    MESH_SCALAR fscalars; /**< Pointer to face scalar field scalars */
 
     uint8_t is_trimesh; /**< Is trimesh? */
     uint8_t dummy;
@@ -263,11 +327,18 @@ MESHLIBAPI void mesh_free_mesh(MESH m);
 MESHLIBAPI MESH mesh_create_mesh_new_grid(MESH_VECTOR3 sz, MESH_VECTOR3 pos, INTDATA m, INTDATA n);
 MESHLIBAPI MESH mesh_create_mesh_new_cuboid(MESH_VECTOR3 sz, MESH_VECTOR3 pos);
 MESHLIBAPI MESH mesh_create_mesh_new_ellipsoid(MESH_VECTOR3 sz, MESH_VECTOR3 pos);
+MESHLIBAPI MESH mesh_create_mesh_new_uniform_ellipsoid(MESH_VECTOR3 sz, MESH_VECTOR3 pos, int n);
 MESHLIBAPI MESH mesh_create_mesh_new_cylinder(MESH_VECTOR3 sz, MESH_VECTOR3 pos);
 MESHLIBAPI MESH mesh_create_mesh_new_cone(MESH_VECTOR3 sz, MESH_VECTOR3 pos);
+MESHLIBAPI MESH mesh_create_mesh_new_rectangle_flat(MESH_VECTOR3 sz, MESH_VECTOR3 pos);
+MESHLIBAPI MESH mesh_create_mesh_new_ellipse_flat(MESH_VECTOR3 sz, MESH_VECTOR3 pos);
 
 MESHLIBAPI MESH mesh_clone_mesh(MESH m, uint16_t flags);
 MESHLIBAPI MESH mesh_combine_mesh(MESH m1, MESH m2);
+MESHLIBAPI int mesh_alloc_mesh_props(MESH m, INTDATA nv, INTDATA nf, INTDATA ne, uint16_t flags);
+MESHLIBAPI int mesh_free_mesh_props(MESH m, uint16_t flags);
+MESHLIBAPI int mesh_alloc_face_vertices(MESH_FACE mf, INTDATA nv);
+MESHLIBAPI int mesh_free_face_vertices(MESH_FACE mf);
 
 MESHLIBAPI MESH mesh_load_file(const char* fname);
 
@@ -291,11 +362,18 @@ MESHLIBAPI MESH __mesh_parse_ply_vertices(MESH m, FILEPOINTER fp, int* dtypes);
 MESHLIBAPI MESH __mesh_parse_ply_faces(MESH m, FILEPOINTER fp, int* dtypes);
 /** \endcond */
 
-MESHLIBAPI int mesh_write_file(MESH m, const char* fname);
+MESHLIBAPI MESH mesh_load_bin(const char* fname);
+MESHLIBAPI MESH mesh_load_out(const char* fname);
+MESHLIBAPI MESH mesh_load_nvm(const char* fname);
+MESHLIBAPI MESH mesh_load_colmap(const char* fname);
 
-MESHLIBAPI int mesh_write_off(MESH m, const char* fname);
-MESHLIBAPI int mesh_write_xyz(MESH m, const char* fname);
-MESHLIBAPI int mesh_write_ply(MESH m, const char* fname);
+MESHLIBAPI int mesh_save_file(MESH m, const char* fname);
+
+MESHLIBAPI int mesh_save_off(MESH m, const char* fname);
+MESHLIBAPI int mesh_save_xyz(MESH m, const char* fname);
+MESHLIBAPI int mesh_save_ply(MESH m, const char* fname);
+MESHLIBAPI int mesh_save_bin(MESH m, const char* fname);
+MESHLIBAPI int mesh_save_obj(MESH m, const char* fname);
 
 MESHLIBAPI int mesh_calc_vertex_normals(MESH m);
 MESHLIBAPI int mesh_calc_face_normals(MESH m);
@@ -303,10 +381,16 @@ MESHLIBAPI int mesh_calc_edges(MESH m);
 MESHLIBAPI int mesh_calc_vertex_adjacency(MESH m);
 MESHLIBAPI int mesh_calc_face_adjacency(MESH m);
 MESHLIBAPI int mesh_upsample(MESH m, int iters);
+MESHLIBAPI int mesh_upsample_loop(MESH m, int iters);
+MESHLIBAPI int mesh_upsample_tarea_adaptive(MESH m, int miters, FLOATDATA e);
 MESHLIBAPI void mesh_cross_vector3(MESH_VECTOR3 x, MESH_VECTOR3 y, MESH_VECTOR3 z);
 MESHLIBAPI void mesh_cross_normal(MESH_NORMAL x, MESH_NORMAL y, MESH_NORMAL z);
 MESHLIBAPI FLOATDATA mesh_calc_triangle_area(MESH_VERTEX a, MESH_VERTEX b, MESH_VERTEX c);
 MESHLIBAPI void mesh_calc_face_normal(MESH_VERTEX v1, MESH_VERTEX v2, MESH_VERTEX v3, MESH_NORMAL n);
+MESHLIBAPI void mesh_calc_aabb(MESH m, MESH_VECTOR3 minv, MESH_VECTOR3 maxv, MESH_VECTOR3 center);
+MESHLIBAPI int mesh_calc_signed_area(MESH m, MESH_VECTOR3 area);
+MESHLIBAPI FLOATDATA mesh_calc_area(MESH m);
+MESHLIBAPI FLOATDATA mesh_calc_volume(MESH m);
 
 MESHLIBAPI INTDATA mesh_find(MESH_STRUCT s, INTDATA q);
 MESHLIBAPI INTDATA mesh_find2(MESH_STRUCT2 s, INTDATA q);
@@ -324,13 +408,21 @@ MESHLIBAPI int mesh_remove_non_manifold_vertices(MESH m);
 MESHLIBAPI int mesh_isnumeric(FILEPOINTER fp);
 MESHLIBAPI int mesh_go_next_word(FILEPOINTER fp);
 MESHLIBAPI int mesh_read_word(FILEPOINTER fp, char *c_word, int sz);
+MESHLIBAPI int mesh_read_word_skip_comment(FILEPOINTER fp, char *c_word, int sz);
 MESHLIBAPI int mesh_read_word_only(FILEPOINTER fp, char *c_word, int sz);
+MESHLIBAPI int mesh_read_word_only_skip_comment(FILEPOINTER fp, char *c_word, int sz);
 MESHLIBAPI int mesh_count_words_in_line(FILEPOINTER fp, int *count);
 MESHLIBAPI int mesh_skip_line(FILEPOINTER fp);
 
-MESHLIBAPI int mesh_bilateral_filter(MESH m, FLOATDATA sigma_c, FLOATDATA sigma_s, int niters);
-MESHLIBAPI int mesh_laplacian_filter(MESH m, FLOATDATA r);
-MESHLIBAPI int mesh_restricted_laplacian_filter(MESH m, FLOATDATA r, FLOATDATA ang);
+MESHLIBAPI int mesh_filter_bilateral(MESH m, FLOATDATA sigma_c, FLOATDATA sigma_s, int niters);
+MESHLIBAPI int mesh_filter_laplacian(MESH m, FLOATDATA r);
+MESHLIBAPI int mesh_filter_laplacian_restricted(MESH m, FLOATDATA r, FLOATDATA ang);
+MESHLIBAPI int mesh_filter_laplacian_depth(MESH m, FLOATDATA r, MESH_VECTOR3 vp);
+MESHLIBAPI int mesh_filter_taubin(MESH m, FLOATDATA lambd, FLOATDATA mu, int niters);
+MESHLIBAPI int mesh_filter_vertex_color_bilateral(MESH m, FLOATDATA sigma_k, FLOATDATA sigma_c, FLOATDATA sigma_s, int niters);
+MESHLIBAPI int mesh_filter_vertex_color_laplacian(MESH m, FLOATDATA r);
+MESHLIBAPI int mesh_filter_vertex_color_min(MESH m, INTDATA niters);
+MESHLIBAPI int mesh_filter_vertex_color_max(MESH m, INTDATA niters);
 
 MESHLIBAPI MESH_ROTATION mesh_rotation_create();
 MESHLIBAPI void mesh_rotation_free(MESH_ROTATION r);
@@ -338,18 +430,74 @@ MESHLIBAPI MESH_ROTATION mesh_rotation_set_matrix(FLOATDATA *mat, MESH_ROTATION 
 MESHLIBAPI MESH_ROTATION mesh_rotation_set_angleaxis(FLOATDATA ang, MESH_NORMAL axis, MESH_ROTATION r);
 
 MESHLIBAPI int mesh_translate(MESH m, FLOATDATA x, FLOATDATA y, FLOATDATA z);
-MESHLIBAPI int mesh_translate_vector(MESH m, MESH_VERTEX v);
+MESHLIBAPI int mesh_translate_vector(MESH m, MESH_VECTOR3 v);
 MESHLIBAPI int mesh_scale(MESH m, FLOATDATA sx, FLOATDATA sy, FLOATDATA sz);
 
 MESHLIBAPI MESH_VERTEX mesh_vertex_rotate(MESH_VERTEX v, MESH_ROTATION r);
 MESHLIBAPI int mesh_rotate(MESH m, MESH_ROTATION r);
 
+MESHLIBAPI MESH_AFFINE mesh_affine_create();
+MESHLIBAPI void mesh_affine_free(MESH_AFFINE tx);
+MESHLIBAPI MESH_AFFINE mesh_affine_set_matrix(FLOATDATA *mat, MESH_AFFINE r);
+MESHLIBAPI int mesh_transform(MESH m, MESH_AFFINE tx);
+MESHLIBAPI MESH_AFFINE mesh_affine_set_rotation_translation(MESH_ROTATION r, MESH_VECTOR3 t, MESH_AFFINE tx);
+
+MESHLIBAPI void mesh_set_seed(int seed);
+MESHLIBAPI FLOATDATA __mesh_rand(void);
+MESHLIBAPI FLOATDATA __mesh_randn(void);
+MESHLIBAPI FLOATDATA __mesh_randexp(void);
+MESHLIBAPI FLOATDATA __mesh_randfun(FLOATDATA(*fun)(FLOATDATA), FLOATDATA xmin, FLOATDATA xmax);
+
+MESHLIBAPI int mesh_add_noise_uniform(MESH m, FLOATDATA sigma);
+MESHLIBAPI int mesh_add_noise_gaussian(MESH m, FLOATDATA sigma);
+MESHLIBAPI int mesh_add_noise_exp(MESH m, FLOATDATA sigma);
+MESHLIBAPI int mesh_add_noise_func(MESH m, FLOATDATA sigma, FLOATDATA(*fun)(FLOATDATA), FLOATDATA xmin, FLOATDATA xmax);
+MESHLIBAPI int mesh_add_noise_uniform_normal(MESH m, FLOATDATA sigma);
+MESHLIBAPI int mesh_add_noise_gaussian_normal(MESH m, FLOATDATA sigma);
+MESHLIBAPI int mesh_add_noise_exp_normal(MESH m, FLOATDATA sigma);
+MESHLIBAPI int mesh_add_noise_func_normal(MESH m, FLOATDATA sigma, FLOATDATA(*fun)(FLOATDATA), FLOATDATA xmin, FLOATDATA xmax);
+MESHLIBAPI int mesh_add_noise_uniform_tangent(MESH m, FLOATDATA sigma);
+MESHLIBAPI int mesh_add_noise_gaussian_tangent(MESH m, FLOATDATA sigma);
+MESHLIBAPI int mesh_add_noise_exp_tangent(MESH m, FLOATDATA sigma);
+MESHLIBAPI int mesh_add_noise_func_tangent(MESH m, FLOATDATA sigma, FLOATDATA(*fun)(FLOATDATA), FLOATDATA xmin, FLOATDATA xmax);
+
 MESHLIBAPI void mesh_draw_mesh(MESH m);
 MESHLIBAPI void mesh_draw_mesh_smooth(MESH m);
 MESHLIBAPI void mesh_draw_point_cloud(MESH m);
+
+MESHLIBAPI int mesh_align_global(MESH m1, MESH m2, int flags, MESH_AFFINE tx);
+
+/* deprecated function names */
+#define mesh_bilateral_filter mesh_filter_bilateral
+#define mesh_laplacian_filter mesh_filter_laplacian
+#define mesh_restricted_laplacian_filter mesh_filter_laplacian_restricted
+#define mesh_depth_laplacian_filter mesh_filter_laplacian_depth
+#define mesh_taubin_filter mesh_filter_taubin
+#define mesh_bilateral_vertex_color_filter mesh_filter_vertex_color_bilateral
+#define mesh_laplacian_vertex_color_filter mesh_filter_vertex_color_laplacian
+#define mesh_min_vertex_color_filter mesh_filter_vertex_color_min
+#define mesh_max_vertex_color_filter mesh_filter_vertex_color_max
+
+#define mesh_write_file mesh_save_file
+#define mesh_write_off mesh_save_off
+#define mesh_write_xyz mesh_save_xyz
+#define mesh_write_ply mesh_save_ply
+#define mesh_write_bin mesh_save_bin
+#define mesh_write_obj mesh_save_obj
+
+#define mesh_read_file mesh_load_file
+#define mesh_read_off mesh_load_off
+#define mesh_read_xyz mesh_load_xyz
+#define mesh_read_ply mesh_load_ply
+#define mesh_read_bin mesh_load_bin
+#define mesh_read_out mesh_load_out
+#define mesh_read_nvm mesh_load_nvm
+#define mesh_read_colmap mesh_load_colmap
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif
+#endif // header guard
+

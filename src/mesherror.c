@@ -1,9 +1,9 @@
 /**
  * @file mesherror.c
  * @author Sk. Mohammadul Haque
- * @version 1.4.2.0
+ * @version 1.8.0.0
  * @copyright
- * Copyright (c) 2013, 2014, 2015, 2016 Sk. Mohammadul Haque.
+ * Copyright (c) 2013-2021 Sk. Mohammadul Haque.
  * @brief This file contains functions pertaining to handling errors.
  */
 

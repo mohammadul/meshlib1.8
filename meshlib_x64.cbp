@@ -4,33 +4,44 @@
 	<Project>
 		<Option title="meshlib_x64" />
 		<Option pch_mode="2" />
-		<Option compiler="gnu_gcc_compiler_w64" />
+		<Option compiler="gcc" />
+		<MakeCommands>
+			<Build command="" />
+			<CompileFile command="" />
+			<Clean command="" />
+			<DistClean command="" />
+			<AskRebuildNeeded command="" />
+			<SilentBuild command=" &gt; $(CMD_NULL)" />
+		</MakeCommands>
 		<Build>
 			<Target title="Debug">
 				<Option output="bin/x64/Debug/meshlib" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="bin/x64/Debug" />
 				<Option object_output="obj/x64/Debug/" />
 				<Option type="3" />
-				<Option compiler="gnu_gcc_compiler_w64" />
+				<Option compiler="gcc" />
 				<Option createDefFile="1" />
-				<Option createStaticLib="1" />
-				<Compiler>
-					<Add option="-Wall" />
-					<Add option="-g" />
-					<Add option="-fopenmp" />
-				</Compiler>
 				<Linker>
 					<Add option="-lopengl32 -lglu32 -fopenmp" />
 				</Linker>
+				<MakeCommands>
+					<Build command="" />
+					<CompileFile command="" />
+					<Clean command="" />
+					<DistClean command="" />
+					<AskRebuildNeeded command="" />
+					<SilentBuild command=" &gt; $(CMD_NULL)" />
+				</MakeCommands>
 			</Target>
 			<Target title="Release">
 				<Option output="bin/x64/Release/meshlib" prefix_auto="1" extension_auto="1" />
+				<Option working_dir="bin/x64/Release" />
 				<Option object_output="obj/x64/Release/" />
 				<Option type="3" />
-				<Option compiler="gnu_gcc_compiler_w64" />
+				<Option compiler="gcc" />
 				<Option createDefFile="1" />
-				<Option createStaticLib="1" />
 				<Compiler>
-					<Add option="-march=core2" />
+					<Add option="-march=native" />
 					<Add option="-O2" />
 					<Add option="-Wall" />
 					<Add option="-fopenmp" />
@@ -42,11 +53,10 @@
 			</Target>
 		</Build>
 		<Compiler>
-			<Add option="-Wall" />
-			<Add option="-g" />
 		</Compiler>
 		<Linker>
-			<Add option="-lopengl32 -lglu32" />
+			<Add library="glu32" />
+			<Add library="opengl32" />
 		</Linker>
 		<Unit filename="include/meshlib.h" />
 		<Unit filename="resources/resource.rc">
@@ -76,19 +86,23 @@
 		<Unit filename="src/meshops.c">
 			<Option compilerVar="CC" />
 		</Unit>
+		<Unit filename="src/meshrand.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/meshsave.c">
+			<Option compilerVar="CC" />
+		</Unit>
 		<Unit filename="src/meshtext.c">
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/meshtransform.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="src/meshwrite.c">
-			<Option compilerVar="CC" />
-		</Unit>
 		<Extensions>
 			<code_completion />
-			<debugger />
 			<envvars />
+			<debugger />
+			<fortran_project />
 		</Extensions>
 	</Project>
 </CodeBlocks_project_file>

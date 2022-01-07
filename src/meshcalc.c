@@ -1,14 +1,15 @@
 /**
  * @file meshcalc.c
  * @author Sk. Mohammadul Haque
- * @version 1.4.2.0
+ * @version 1.8.0.0
  * @copyright
- * Copyright (c) 2013, 2014, 2015, 2016 Sk. Mohammadul Haque.
- * @brief This file contains functions pertaining to different mesh computations.
+ * Copyright (c) 2013-2021 Sk. Mohammadul Haque.
+  * @brief This file contains functions pertaining to different mesh computations.
  */
 
 #include <string.h>
 #include <omp.h>
+#include <float.h>
 #include "../include/meshlib.h"
 
 /** \cond HIDDEN_SYMBOLS */
@@ -205,12 +206,12 @@ int mesh_calc_vertex_normals(MESH m)
     for(i=0; i<m->num_vertices; ++i)
     {
         FLOATDATA t = sqrt(m->vnormals[i].x*m->vnormals[i].x+m->vnormals[i].y*m->vnormals[i].y+m->vnormals[i].z*m->vnormals[i].z);
-		if(__mesh_isnan(t))
-		{
-			m->vnormals[i].x = 0.0;
+        if(__mesh_isnan(t))
+        {
+            m->vnormals[i].x = 0.0;
             m->vnormals[i].y = 0.0;
             m->vnormals[i].z = 0.0;
-		}
+        }
         if(t>0.0)
         {
             m->vnormals[i].x /= t;
@@ -282,11 +283,11 @@ int mesh_calc_edges(MESH m)
     INTDATA i, j, num_edges = 0;
     INTDATA i_01, i_12, i_02;
     INTDATA v0, v1, v2, v_tmp;
+    if(m==NULL) return 1;
+    if(m->is_faces==0) return 2;
     if(m->is_edges) free(m->edges);
     m->num_edges = 0;
     m->edges = NULL;
-    if(m==NULL) return 1;
-    if(m->is_faces==0) return 2;
 
     if(m->is_vfaces!=1) mesh_calc_vertex_adjacency(m);
 
@@ -608,7 +609,7 @@ int mesh_upsample(MESH m, int iters)
     INTDATA i, k, curr_idx;
     FLOATDATA t;
     INTDATA kv, i_01, i_12, i_20, c_v_0_indcs, c_v_1_indcs, c_v_2_indcs;
-    uint8_t is_vfaces, is_ffaces, is_edges;
+    uint8_t is_vfaces = 0, is_ffaces = 0, is_edges = 0;
 
     if(m==NULL) return 1;
     if(m->is_faces==0) return 2;
@@ -821,6 +822,8 @@ int mesh_upsample(MESH m, int iters)
             new_faces[curr_idx].vertices[0] = c_v_0_indcs;
             new_faces[curr_idx].vertices[1] = c_v_1_indcs;
             new_faces[curr_idx].vertices[2] = c_v_2_indcs;
+
+            free(m->faces[i].vertices); /* April 20, 2018, important leaking earlier */
         }
 
         for(i=0; i<m->num_vertices; ++i)
@@ -828,10 +831,6 @@ int mesh_upsample(MESH m, int iters)
             if(v_table[i].items!=NULL) free(v_table[i].items);
         }
         free(v_table);
-        if(m->is_vfaces)
-        {
-            mesh_calc_vertex_adjacency(m);
-        }
         free(m->faces);
         m->faces = new_faces;
         m->num_faces = 4*m->num_faces;
@@ -841,6 +840,503 @@ int mesh_upsample(MESH m, int iters)
     if(is_ffaces==1) mesh_calc_face_adjacency(m);
     if(is_edges==1) mesh_calc_edges(m);
     return 0;
+}
+
+/** \brief Upsamples a given mesh using Loop's algorithm
+ *
+ * \param[in] m Input mesh
+ * \param[in] iters Number of iterations
+ * \return Error code
+ *
+ */
+
+int mesh_upsample_loop(MESH m, int iters)
+{
+    MESH_STRUCT v_table = NULL;
+    MESH_FACE new_faces = NULL;
+    INTDATA i, k, curr_idx;
+    FLOATDATA t;
+    INTDATA kv, i_01, i_12, i_20, c_v_0_indcs, c_v_1_indcs, c_v_2_indcs;
+    uint8_t is_vfaces = 0, is_ffaces = 0, is_edges = 0;
+
+    if(m==NULL) return 1;
+    if(m->is_faces==0) return 2;
+    if(m->is_trimesh==0) return 3;
+    if(m->is_fcolors!=0) return 4;
+    if(m->is_fnormals!=0) return 5;
+
+    if(m->is_vfaces)
+    {
+        is_vfaces = 1;
+        #pragma omp parallel for shared(m)
+        for(i=0; i<m->num_vertices; ++i)
+        {
+            if(m->vfaces[i].faces!=NULL) free(m->vfaces[i].faces);
+        }
+        free(m->vfaces);
+        m->vfaces = NULL;
+    }
+    if(m->is_ffaces)
+    {
+        is_ffaces = 1;
+        #pragma omp parallel for shared(m)
+        for(i=0; i<m->num_faces; ++i)
+        {
+            if(m->ffaces[i].faces!=NULL) free(m->ffaces[i].faces);
+        }
+        free(m->ffaces);
+        m->ffaces = NULL;
+    }
+    if(m->is_edges)
+    {
+        is_edges = 1;
+        free(m->edges);
+        m->edges = NULL;
+        m->num_edges = 0;
+    }
+
+    for(k=0; k<iters; ++k)
+    {
+        new_faces = (MESH_FACE)malloc(4*m->num_faces*sizeof(mesh_face));
+        v_table = (MESH_STRUCT)malloc(m->num_vertices*sizeof(mesh_struct));
+        if(v_table==NULL ||new_faces==NULL) mesh_error(MESH_ERR_MALLOC);
+        for(i=0; i<m->num_vertices; ++i)
+        {
+            v_table[i].num_items = 0;
+            v_table[i].items = NULL;
+        }
+        kv = m->num_vertices-1;
+        for(i=0; i<m->num_faces; ++i)
+        {
+            i_01 = __mesh_find(&v_table[m->faces[i].vertices[0]], m->faces[i].vertices[1]);
+
+            if(i_01<0)
+            {
+                ++kv;
+                c_v_0_indcs = kv;
+                v_table[m->faces[i].vertices[0]].items = (INTDATA*)realloc(v_table[m->faces[i].vertices[0]].items, sizeof(INTDATA)*(v_table[m->faces[i].vertices[0]].num_items+2));
+                v_table[m->faces[i].vertices[0]].num_items += 2;
+                v_table[m->faces[i].vertices[0]].items[v_table[m->faces[i].vertices[0]].num_items-2] = m->faces[i].vertices[1];
+                v_table[m->faces[i].vertices[0]].items[v_table[m->faces[i].vertices[0]].num_items-1] = c_v_0_indcs;
+
+                v_table[m->faces[i].vertices[1]].items = (INTDATA*)realloc(v_table[m->faces[i].vertices[1]].items, sizeof(INTDATA)*(v_table[m->faces[i].vertices[1]].num_items+2));
+                v_table[m->faces[i].vertices[1]].num_items += 2;
+                v_table[m->faces[i].vertices[1]].items[v_table[m->faces[i].vertices[1]].num_items-2] = m->faces[i].vertices[0];
+                v_table[m->faces[i].vertices[1]].items[v_table[m->faces[i].vertices[1]].num_items-1] = c_v_0_indcs;
+
+                m->vertices = (MESH_VERTEX)realloc(m->vertices, sizeof(mesh_vertex)*(kv+1));
+                m->vertices[kv].x = 0.5*(m->vertices[m->faces[i].vertices[0]].x+m->vertices[m->faces[i].vertices[1]].x);
+                m->vertices[kv].y = 0.5*(m->vertices[m->faces[i].vertices[0]].y+m->vertices[m->faces[i].vertices[1]].y);
+                m->vertices[kv].z = 0.5*(m->vertices[m->faces[i].vertices[0]].z+m->vertices[m->faces[i].vertices[1]].z);
+                if(m->is_vnormals)
+                {
+                    m->vnormals = (MESH_NORMAL)realloc(m->vnormals, sizeof(mesh_normal)*(kv+1));
+                    m->vnormals[kv].x = m->vnormals[m->faces[i].vertices[0]].x+m->vnormals[m->faces[i].vertices[1]].x;
+                    m->vnormals[kv].y = m->vnormals[m->faces[i].vertices[0]].y+m->vnormals[m->faces[i].vertices[1]].y;
+                    m->vnormals[kv].z = m->vnormals[m->faces[i].vertices[0]].z+m->vnormals[m->faces[i].vertices[1]].z;
+                    t = sqrt(m->vnormals[kv].x*m->vnormals[kv].x+m->vnormals[kv].y*m->vnormals[kv].y+m->vnormals[kv].z*m->vnormals[kv].z);
+                    m->vnormals[kv].x /= t;
+                    m->vnormals[kv].y /= t;
+                    m->vnormals[kv].z /= t;
+                }
+                if(m->is_vcolors)
+                {
+                    m->vcolors = (MESH_COLOR)realloc(m->vcolors, sizeof(mesh_color)*(kv+1));
+                    m->vcolors[kv].r = 0.5*(m->vcolors[m->faces[i].vertices[0]].r+m->vcolors[m->faces[i].vertices[1]].r);
+                    m->vcolors[kv].g = 0.5*(m->vcolors[m->faces[i].vertices[0]].g+m->vcolors[m->faces[i].vertices[1]].g);
+                    m->vcolors[kv].b = 0.5*(m->vcolors[m->faces[i].vertices[0]].b+m->vcolors[m->faces[i].vertices[1]].b);
+                    m->vcolors[kv].a = 0.5*(m->vcolors[m->faces[i].vertices[0]].a+m->vcolors[m->faces[i].vertices[1]].a);
+                }
+            }
+            else
+            {
+                c_v_0_indcs = v_table[m->faces[i].vertices[0]].items[i_01+1];
+            }
+
+            i_12 = __mesh_find(&v_table[m->faces[i].vertices[1]], m->faces[i].vertices[2]);
+
+            if(i_12<0)
+            {
+                ++kv;
+                c_v_1_indcs = kv;
+                v_table[m->faces[i].vertices[1]].items = (INTDATA*)realloc(v_table[m->faces[i].vertices[1]].items, sizeof(INTDATA)*(v_table[m->faces[i].vertices[1]].num_items+2));
+                v_table[m->faces[i].vertices[1]].num_items += 2;
+                v_table[m->faces[i].vertices[1]].items[v_table[m->faces[i].vertices[1]].num_items-2] = m->faces[i].vertices[2];
+                v_table[m->faces[i].vertices[1]].items[v_table[m->faces[i].vertices[1]].num_items-1] = c_v_1_indcs;
+
+                v_table[m->faces[i].vertices[2]].items = (INTDATA*)realloc(v_table[m->faces[i].vertices[2]].items, sizeof(INTDATA)*(v_table[m->faces[i].vertices[2]].num_items+2));
+                v_table[m->faces[i].vertices[2]].num_items += 2;
+                v_table[m->faces[i].vertices[2]].items[v_table[m->faces[i].vertices[2]].num_items-2] = m->faces[i].vertices[1];
+                v_table[m->faces[i].vertices[2]].items[v_table[m->faces[i].vertices[2]].num_items-1] = c_v_1_indcs;
+
+                m->vertices = (MESH_VERTEX)realloc(m->vertices, sizeof(mesh_vertex)*(kv+1));
+                m->vertices[kv].x = 0.5*(m->vertices[m->faces[i].vertices[1]].x+m->vertices[m->faces[i].vertices[2]].x);
+                m->vertices[kv].y = 0.5*(m->vertices[m->faces[i].vertices[1]].y+m->vertices[m->faces[i].vertices[2]].y);
+                m->vertices[kv].z = 0.5*(m->vertices[m->faces[i].vertices[1]].z+m->vertices[m->faces[i].vertices[2]].z);
+                if(m->is_vnormals)
+                {
+                    m->vnormals = (MESH_NORMAL)realloc(m->vnormals, sizeof(mesh_normal)*(kv+1));
+                    m->vnormals[kv].x = m->vnormals[m->faces[i].vertices[1]].x+m->vnormals[m->faces[i].vertices[2]].x;
+                    m->vnormals[kv].y = m->vnormals[m->faces[i].vertices[1]].y+m->vnormals[m->faces[i].vertices[2]].y;
+                    m->vnormals[kv].z = m->vnormals[m->faces[i].vertices[1]].z+m->vnormals[m->faces[i].vertices[2]].z;
+                    t = sqrt(m->vnormals[kv].x*m->vnormals[kv].x+m->vnormals[kv].y*m->vnormals[kv].y+m->vnormals[kv].z*m->vnormals[kv].z);
+                    m->vnormals[kv].x /= t;
+                    m->vnormals[kv].y /= t;
+                    m->vnormals[kv].z /= t;
+                }
+                if(m->is_vcolors)
+                {
+                    m->vcolors = (MESH_COLOR)realloc(m->vcolors, sizeof(mesh_color)*(kv+1));
+                    m->vcolors[kv].r = 0.5*(m->vcolors[m->faces[i].vertices[1]].r+m->vcolors[m->faces[i].vertices[2]].r);
+                    m->vcolors[kv].g = 0.5*(m->vcolors[m->faces[i].vertices[1]].g+m->vcolors[m->faces[i].vertices[2]].g);
+                    m->vcolors[kv].b = 0.5*(m->vcolors[m->faces[i].vertices[1]].b+m->vcolors[m->faces[i].vertices[2]].b);
+                    m->vcolors[kv].a = 0.5*(m->vcolors[m->faces[i].vertices[1]].a+m->vcolors[m->faces[i].vertices[2]].a);
+                }
+            }
+            else
+            {
+                c_v_1_indcs = v_table[m->faces[i].vertices[1]].items[i_12+1];
+            }
+
+            i_20 = __mesh_find(&v_table[m->faces[i].vertices[2]], m->faces[i].vertices[0]);
+
+            if(i_20<0)
+            {
+                ++kv;
+                c_v_2_indcs = kv;
+                v_table[m->faces[i].vertices[2]].items = (INTDATA*)realloc(v_table[m->faces[i].vertices[2]].items, sizeof(INTDATA)*(v_table[m->faces[i].vertices[2]].num_items+2));
+                v_table[m->faces[i].vertices[2]].num_items += 2;
+                v_table[m->faces[i].vertices[2]].items[v_table[m->faces[i].vertices[2]].num_items-2] = m->faces[i].vertices[0];
+                v_table[m->faces[i].vertices[2]].items[v_table[m->faces[i].vertices[2]].num_items-1] = c_v_2_indcs;
+
+                v_table[m->faces[i].vertices[0]].items = (INTDATA*)realloc(v_table[m->faces[i].vertices[0]].items, sizeof(INTDATA)*(v_table[m->faces[i].vertices[0]].num_items+2));
+                v_table[m->faces[i].vertices[0]].num_items += 2;
+                v_table[m->faces[i].vertices[0]].items[v_table[m->faces[i].vertices[0]].num_items-2] = m->faces[i].vertices[2];
+                v_table[m->faces[i].vertices[0]].items[v_table[m->faces[i].vertices[0]].num_items-1] = c_v_2_indcs;
+
+                m->vertices = (MESH_VERTEX)realloc(m->vertices, sizeof(mesh_vertex)*(kv+1));
+                m->vertices[kv].x = 0.5*(m->vertices[m->faces[i].vertices[2]].x+m->vertices[m->faces[i].vertices[0]].x);
+                m->vertices[kv].y = 0.5*(m->vertices[m->faces[i].vertices[2]].y+m->vertices[m->faces[i].vertices[0]].y);
+                m->vertices[kv].z = 0.5*(m->vertices[m->faces[i].vertices[2]].z+m->vertices[m->faces[i].vertices[0]].z);
+                if(m->is_vnormals)
+                {
+                    m->vnormals = (MESH_NORMAL)realloc(m->vnormals, sizeof(mesh_normal)*(kv+1));
+                    m->vnormals[kv].x = m->vnormals[m->faces[i].vertices[2]].x+m->vnormals[m->faces[i].vertices[0]].x;
+                    m->vnormals[kv].y = m->vnormals[m->faces[i].vertices[2]].y+m->vnormals[m->faces[i].vertices[0]].y;
+                    m->vnormals[kv].z = m->vnormals[m->faces[i].vertices[2]].z+m->vnormals[m->faces[i].vertices[0]].z;
+                    t = sqrt(m->vnormals[kv].x*m->vnormals[kv].x+m->vnormals[kv].y*m->vnormals[kv].y+m->vnormals[kv].z*m->vnormals[kv].z);
+                    m->vnormals[kv].x /= t;
+                    m->vnormals[kv].y /= t;
+                    m->vnormals[kv].z /= t;
+                }
+                if(m->is_vcolors)
+                {
+                    m->vcolors = (MESH_COLOR)realloc(m->vcolors, sizeof(mesh_color)*(kv+1));
+                    m->vcolors[kv].r = 0.5*(m->vcolors[m->faces[i].vertices[2]].r+m->vcolors[m->faces[i].vertices[0]].r);
+                    m->vcolors[kv].g = 0.5*(m->vcolors[m->faces[i].vertices[2]].g+m->vcolors[m->faces[i].vertices[0]].g);
+                    m->vcolors[kv].b = 0.5*(m->vcolors[m->faces[i].vertices[2]].b+m->vcolors[m->faces[i].vertices[0]].b);
+                    m->vcolors[kv].a = 0.5*(m->vcolors[m->faces[i].vertices[2]].a+m->vcolors[m->faces[i].vertices[0]].a);
+                }
+            }
+            else
+            {
+                c_v_2_indcs = v_table[m->faces[i].vertices[2]].items[i_20+1];
+            }
+
+            curr_idx = i*4;
+            new_faces[curr_idx].num_vertices = 3;
+            new_faces[curr_idx].vertices = (INTDATA *)malloc(3*sizeof(INTDATA));
+            new_faces[curr_idx].vertices[0] = m->faces[i].vertices[0];
+            new_faces[curr_idx].vertices[1] = c_v_0_indcs;
+            new_faces[curr_idx].vertices[2] = c_v_2_indcs;
+
+            ++curr_idx;
+            new_faces[curr_idx].num_vertices = 3;
+            new_faces[curr_idx].vertices = (INTDATA *)malloc(3*sizeof(INTDATA));
+            new_faces[curr_idx].vertices[0] = c_v_0_indcs;
+            new_faces[curr_idx].vertices[1] = m->faces[i].vertices[1];
+            new_faces[curr_idx].vertices[2] = c_v_1_indcs;
+
+            ++curr_idx;
+            new_faces[curr_idx].num_vertices = 3;
+            new_faces[curr_idx].vertices = (INTDATA *)malloc(3*sizeof(INTDATA));
+            new_faces[curr_idx].vertices[0] = c_v_1_indcs;
+            new_faces[curr_idx].vertices[1] = m->faces[i].vertices[2];
+            new_faces[curr_idx].vertices[2] = c_v_2_indcs;
+
+            ++curr_idx;
+            new_faces[curr_idx].num_vertices = 3;
+            new_faces[curr_idx].vertices = (INTDATA *)malloc(3*sizeof(INTDATA));
+            new_faces[curr_idx].vertices[0] = c_v_0_indcs;
+            new_faces[curr_idx].vertices[1] = c_v_1_indcs;
+            new_faces[curr_idx].vertices[2] = c_v_2_indcs;
+
+            free(m->faces[i].vertices); /* April 20, 2018, important leaking earlier */
+        }
+
+        for(i=0; i<m->num_vertices; ++i)
+        {
+            if(v_table[i].items!=NULL) free(v_table[i].items);
+        }
+        free(v_table);
+        free(m->faces);
+        m->faces = new_faces;
+        m->num_faces = 4*m->num_faces;
+        m->num_vertices = kv+1;
+    }
+    if(is_vfaces==1) mesh_calc_vertex_adjacency(m);
+    if(is_ffaces==1) mesh_calc_face_adjacency(m);
+    if(is_edges==1) mesh_calc_edges(m);
+    return 0;
+}
+
+
+/** \brief Upsamples a given mesh upto a given triangle area threshold
+ *
+ * \param[in] m Input mesh
+ * \param[in] miters Maximum number of iterations
+ * \param[in] e Triangle area threshold
+ * \return Error code
+ *
+ */
+
+int mesh_upsample_tarea_adaptive(MESH m, int miters, FLOATDATA e)
+{
+    MESH_STRUCT v_table = NULL;
+    MESH_FACE new_faces = NULL;
+    INTDATA i, k, curr_idx, valid_i;
+    INTDATA kv, i_01, i_12, i_20, c_v_0_indcs, c_v_1_indcs, c_v_2_indcs;
+    int rval = 1;
+    uint8_t is_vfaces = 0, is_ffaces = 0, is_edges = 0;
+    if(m==NULL) return 1;
+    if(m->is_faces==0) return 2;
+    if(m->is_trimesh==0) return 3;
+    if(m->is_fcolors!=0) return 4;
+    if(m->is_fnormals!=0) return 5;
+    if(m->is_vfaces)
+    {
+        is_vfaces = 1;
+        #pragma omp parallel for shared(m)
+        for(i=0; i<m->num_vertices; ++i)
+        {
+            if(m->vfaces[i].faces!=NULL) free(m->vfaces[i].faces);
+        }
+        free(m->vfaces);
+        m->vfaces = NULL;
+    }
+    if(m->is_ffaces)
+    {
+        is_ffaces = 1;
+        #pragma omp parallel for shared(m)
+        for(i=0; i<m->num_faces; ++i)
+        {
+            if(m->ffaces[i].faces!=NULL) free(m->ffaces[i].faces);
+        }
+        free(m->ffaces);
+        m->ffaces = NULL;
+    }
+    if(m->is_edges)
+    {
+        is_edges = 1;
+        free(m->edges);
+        m->edges = NULL;
+        m->num_edges = 0;
+    }
+    for(k=0; k<miters; ++k)
+    {
+        new_faces = (MESH_FACE)malloc(4*m->num_faces*sizeof(mesh_face));
+        v_table = (MESH_STRUCT)malloc(m->num_vertices*sizeof(mesh_struct));
+        if(v_table==NULL ||new_faces==NULL) mesh_error(MESH_ERR_MALLOC);
+        for(i=0; i<m->num_vertices; ++i)
+        {
+            v_table[i].num_items = 0;
+            v_table[i].items = NULL;
+        }
+        kv = m->num_vertices-1;
+        valid_i = 0;
+        for(i=0; i<m->num_faces; ++i)
+        {
+            MESH_FACE cf = m->faces+i;
+            curr_idx = valid_i*3+i;
+            if(mesh_calc_triangle_area(m->vertices+cf->vertices[0], m->vertices+cf->vertices[1], m->vertices+cf->vertices[2])>e)
+            {
+                FLOATDATA t;
+                i_01 = __mesh_find(&v_table[cf->vertices[0]], cf->vertices[1]);
+                if(i_01<0)
+                {
+                    ++kv;
+                    c_v_0_indcs = kv;
+                    v_table[cf->vertices[0]].items = (INTDATA*)realloc(v_table[cf->vertices[0]].items, sizeof(INTDATA)*(v_table[cf->vertices[0]].num_items+2));
+                    v_table[cf->vertices[0]].num_items += 2;
+                    v_table[cf->vertices[0]].items[v_table[cf->vertices[0]].num_items-2] = cf->vertices[1];
+                    v_table[cf->vertices[0]].items[v_table[cf->vertices[0]].num_items-1] = c_v_0_indcs;
+                    v_table[cf->vertices[1]].items = (INTDATA*)realloc(v_table[cf->vertices[1]].items, sizeof(INTDATA)*(v_table[cf->vertices[1]].num_items+2));
+                    v_table[cf->vertices[1]].num_items += 2;
+                    v_table[cf->vertices[1]].items[v_table[cf->vertices[1]].num_items-2] = cf->vertices[0];
+                    v_table[cf->vertices[1]].items[v_table[cf->vertices[1]].num_items-1] = c_v_0_indcs;
+                    m->vertices = (MESH_VERTEX)realloc(m->vertices, sizeof(mesh_vertex)*(kv+1));
+                    m->vertices[kv].x = 0.5*(m->vertices[cf->vertices[0]].x+m->vertices[cf->vertices[1]].x);
+                    m->vertices[kv].y = 0.5*(m->vertices[cf->vertices[0]].y+m->vertices[cf->vertices[1]].y);
+                    m->vertices[kv].z = 0.5*(m->vertices[cf->vertices[0]].z+m->vertices[cf->vertices[1]].z);
+                    if(m->is_vnormals)
+                    {
+                        m->vnormals = (MESH_NORMAL)realloc(m->vnormals, sizeof(mesh_normal)*(kv+1));
+                        m->vnormals[kv].x = m->vnormals[cf->vertices[0]].x+m->vnormals[cf->vertices[1]].x;
+                        m->vnormals[kv].y = m->vnormals[cf->vertices[0]].y+m->vnormals[cf->vertices[1]].y;
+                        m->vnormals[kv].z = m->vnormals[cf->vertices[0]].z+m->vnormals[cf->vertices[1]].z;
+                        t = sqrt(m->vnormals[kv].x*m->vnormals[kv].x+m->vnormals[kv].y*m->vnormals[kv].y+m->vnormals[kv].z*m->vnormals[kv].z);
+                        m->vnormals[kv].x /= t;
+                        m->vnormals[kv].y /= t;
+                        m->vnormals[kv].z /= t;
+                    }
+                    if(m->is_vcolors)
+                    {
+                        m->vcolors = (MESH_COLOR)realloc(m->vcolors, sizeof(mesh_color)*(kv+1));
+                        m->vcolors[kv].r = 0.5*(m->vcolors[cf->vertices[0]].r+m->vcolors[cf->vertices[1]].r);
+                        m->vcolors[kv].g = 0.5*(m->vcolors[cf->vertices[0]].g+m->vcolors[cf->vertices[1]].g);
+                        m->vcolors[kv].b = 0.5*(m->vcolors[cf->vertices[0]].b+m->vcolors[cf->vertices[1]].b);
+                        m->vcolors[kv].a = 0.5*(m->vcolors[cf->vertices[0]].a+m->vcolors[cf->vertices[1]].a);
+                    }
+                }
+                else
+                {
+                    c_v_0_indcs = v_table[cf->vertices[0]].items[i_01+1];
+                }
+                i_12 = __mesh_find(&v_table[cf->vertices[1]], cf->vertices[2]);
+                if(i_12<0)
+                {
+                    ++kv;
+                    c_v_1_indcs = kv;
+                    v_table[cf->vertices[1]].items = (INTDATA*)realloc(v_table[cf->vertices[1]].items, sizeof(INTDATA)*(v_table[cf->vertices[1]].num_items+2));
+                    v_table[cf->vertices[1]].num_items += 2;
+                    v_table[cf->vertices[1]].items[v_table[cf->vertices[1]].num_items-2] = cf->vertices[2];
+                    v_table[cf->vertices[1]].items[v_table[cf->vertices[1]].num_items-1] = c_v_1_indcs;
+                    v_table[cf->vertices[2]].items = (INTDATA*)realloc(v_table[cf->vertices[2]].items, sizeof(INTDATA)*(v_table[cf->vertices[2]].num_items+2));
+                    v_table[cf->vertices[2]].num_items += 2;
+                    v_table[cf->vertices[2]].items[v_table[cf->vertices[2]].num_items-2] = cf->vertices[1];
+                    v_table[cf->vertices[2]].items[v_table[cf->vertices[2]].num_items-1] = c_v_1_indcs;
+                    m->vertices = (MESH_VERTEX)realloc(m->vertices, sizeof(mesh_vertex)*(kv+1));
+                    m->vertices[kv].x = 0.5*(m->vertices[cf->vertices[1]].x+m->vertices[cf->vertices[2]].x);
+                    m->vertices[kv].y = 0.5*(m->vertices[cf->vertices[1]].y+m->vertices[cf->vertices[2]].y);
+                    m->vertices[kv].z = 0.5*(m->vertices[cf->vertices[1]].z+m->vertices[cf->vertices[2]].z);
+                    if(m->is_vnormals)
+                    {
+                        m->vnormals = (MESH_NORMAL)realloc(m->vnormals, sizeof(mesh_normal)*(kv+1));
+                        m->vnormals[kv].x = m->vnormals[cf->vertices[1]].x+m->vnormals[cf->vertices[2]].x;
+                        m->vnormals[kv].y = m->vnormals[cf->vertices[1]].y+m->vnormals[cf->vertices[2]].y;
+                        m->vnormals[kv].z = m->vnormals[cf->vertices[1]].z+m->vnormals[cf->vertices[2]].z;
+                        t = sqrt(m->vnormals[kv].x*m->vnormals[kv].x+m->vnormals[kv].y*m->vnormals[kv].y+m->vnormals[kv].z*m->vnormals[kv].z);
+                        m->vnormals[kv].x /= t;
+                        m->vnormals[kv].y /= t;
+                        m->vnormals[kv].z /= t;
+                    }
+                    if(m->is_vcolors)
+                    {
+                        m->vcolors = (MESH_COLOR)realloc(m->vcolors, sizeof(mesh_color)*(kv+1));
+                        m->vcolors[kv].r = 0.5*(m->vcolors[cf->vertices[1]].r+m->vcolors[cf->vertices[2]].r);
+                        m->vcolors[kv].g = 0.5*(m->vcolors[cf->vertices[1]].g+m->vcolors[cf->vertices[2]].g);
+                        m->vcolors[kv].b = 0.5*(m->vcolors[cf->vertices[1]].b+m->vcolors[cf->vertices[2]].b);
+                        m->vcolors[kv].a = 0.5*(m->vcolors[cf->vertices[1]].a+m->vcolors[cf->vertices[2]].a);
+                    }
+                }
+                else
+                {
+                    c_v_1_indcs = v_table[cf->vertices[1]].items[i_12+1];
+                }
+                i_20 = __mesh_find(&v_table[cf->vertices[2]], cf->vertices[0]);
+                if(i_20<0)
+                {
+                    ++kv;
+                    c_v_2_indcs = kv;
+                    v_table[cf->vertices[2]].items = (INTDATA*)realloc(v_table[cf->vertices[2]].items, sizeof(INTDATA)*(v_table[cf->vertices[2]].num_items+2));
+                    v_table[cf->vertices[2]].num_items += 2;
+                    v_table[cf->vertices[2]].items[v_table[cf->vertices[2]].num_items-2] = cf->vertices[0];
+                    v_table[cf->vertices[2]].items[v_table[cf->vertices[2]].num_items-1] = c_v_2_indcs;
+                    v_table[cf->vertices[0]].items = (INTDATA*)realloc(v_table[cf->vertices[0]].items, sizeof(INTDATA)*(v_table[cf->vertices[0]].num_items+2));
+                    v_table[cf->vertices[0]].num_items += 2;
+                    v_table[cf->vertices[0]].items[v_table[cf->vertices[0]].num_items-2] = cf->vertices[2];
+                    v_table[cf->vertices[0]].items[v_table[cf->vertices[0]].num_items-1] = c_v_2_indcs;
+                    m->vertices = (MESH_VERTEX)realloc(m->vertices, sizeof(mesh_vertex)*(kv+1));
+                    m->vertices[kv].x = 0.5*(m->vertices[cf->vertices[2]].x+m->vertices[cf->vertices[0]].x);
+                    m->vertices[kv].y = 0.5*(m->vertices[cf->vertices[2]].y+m->vertices[cf->vertices[0]].y);
+                    m->vertices[kv].z = 0.5*(m->vertices[cf->vertices[2]].z+m->vertices[cf->vertices[0]].z);
+                    if(m->is_vnormals)
+                    {
+                        m->vnormals = (MESH_NORMAL)realloc(m->vnormals, sizeof(mesh_normal)*(kv+1));
+                        m->vnormals[kv].x = m->vnormals[cf->vertices[2]].x+m->vnormals[cf->vertices[0]].x;
+                        m->vnormals[kv].y = m->vnormals[cf->vertices[2]].y+m->vnormals[cf->vertices[0]].y;
+                        m->vnormals[kv].z = m->vnormals[cf->vertices[2]].z+m->vnormals[cf->vertices[0]].z;
+                        t = sqrt(m->vnormals[kv].x*m->vnormals[kv].x+m->vnormals[kv].y*m->vnormals[kv].y+m->vnormals[kv].z*m->vnormals[kv].z);
+                        m->vnormals[kv].x /= t;
+                        m->vnormals[kv].y /= t;
+                        m->vnormals[kv].z /= t;
+                    }
+                    if(m->is_vcolors)
+                    {
+                        m->vcolors = (MESH_COLOR)realloc(m->vcolors, sizeof(mesh_color)*(kv+1));
+                        m->vcolors[kv].r = 0.5*(m->vcolors[cf->vertices[2]].r+m->vcolors[cf->vertices[0]].r);
+                        m->vcolors[kv].g = 0.5*(m->vcolors[cf->vertices[2]].g+m->vcolors[cf->vertices[0]].g);
+                        m->vcolors[kv].b = 0.5*(m->vcolors[cf->vertices[2]].b+m->vcolors[cf->vertices[0]].b);
+                        m->vcolors[kv].a = 0.5*(m->vcolors[cf->vertices[2]].a+m->vcolors[cf->vertices[0]].a);
+                    }
+                }
+                else
+                {
+                    c_v_2_indcs = v_table[cf->vertices[2]].items[i_20+1];
+                }
+                new_faces[curr_idx].num_vertices = 3;
+                new_faces[curr_idx].vertices = (INTDATA *)malloc(3*sizeof(INTDATA));
+                new_faces[curr_idx].vertices[0] = cf->vertices[0];
+                new_faces[curr_idx].vertices[1] = c_v_0_indcs;
+                new_faces[curr_idx].vertices[2] = c_v_2_indcs;
+                ++curr_idx;
+                new_faces[curr_idx].num_vertices = 3;
+                new_faces[curr_idx].vertices = (INTDATA *)malloc(3*sizeof(INTDATA));
+                new_faces[curr_idx].vertices[0] = c_v_0_indcs;
+                new_faces[curr_idx].vertices[1] = cf->vertices[1];
+                new_faces[curr_idx].vertices[2] = c_v_1_indcs;
+                ++curr_idx;
+                new_faces[curr_idx].num_vertices = 3;
+                new_faces[curr_idx].vertices = (INTDATA *)malloc(3*sizeof(INTDATA));
+                new_faces[curr_idx].vertices[0] = c_v_1_indcs;
+                new_faces[curr_idx].vertices[1] = cf->vertices[2];
+                new_faces[curr_idx].vertices[2] = c_v_2_indcs;
+                ++curr_idx;
+                new_faces[curr_idx].num_vertices = 3;
+                new_faces[curr_idx].vertices = (INTDATA *)malloc(3*sizeof(INTDATA));
+                new_faces[curr_idx].vertices[0] = c_v_0_indcs;
+                new_faces[curr_idx].vertices[1] = c_v_1_indcs;
+                new_faces[curr_idx].vertices[2] = c_v_2_indcs;
+                ++valid_i;
+            }
+            else
+            {
+                new_faces[curr_idx].num_vertices = 3;
+                new_faces[curr_idx].vertices = (INTDATA *)malloc(3*sizeof(INTDATA));
+                new_faces[curr_idx].vertices[0] = cf->vertices[0];
+                new_faces[curr_idx].vertices[1] = cf->vertices[1];
+                new_faces[curr_idx].vertices[2] = cf->vertices[2];
+            }
+        }
+        for(i=0; i<m->num_vertices; ++i)
+        {
+            if(v_table[i].items!=NULL) free(v_table[i].items);
+        }
+        free(v_table);
+        free(m->faces);
+        m->faces = new_faces;
+        m->num_faces = 3*valid_i+m->num_faces;
+        m->num_vertices = kv+1;
+        if(valid_i<=0)
+        {
+            rval = 0;
+            break;
+        }
+    }
+    if(is_vfaces==1) mesh_calc_vertex_adjacency(m);
+    if(is_ffaces==1) mesh_calc_face_adjacency(m);
+    if(is_edges==1) mesh_calc_edges(m);
+    return rval;
 }
 
 /** \brief Computes area of a triangle
@@ -854,16 +1350,136 @@ int mesh_upsample(MESH m, int iters)
 
 FLOATDATA mesh_calc_triangle_area(MESH_VERTEX a, MESH_VERTEX b, MESH_VERTEX c)
 {
-    static mesh_vertex p, q, r;
-    static FLOATDATA area;
-    p.x = a->x - b->x;
-    p.y = a->y - b->y;
-    p.z = a->z - b->z;
-    q.x = a->x - c->x;
-    q.y = a->y - c->y;
-    q.z = a->z - c->z;
+    mesh_vertex p, q, r;
+    FLOATDATA area;
+    p.x = a->x-b->x;
+    p.y = a->y-b->y;
+    p.z = a->z-b->z;
+    q.x = a->x-c->x;
+    q.y = a->y-c->y;
+    q.z = a->z-c->z;
     mesh_cross_vector3(&p, &q, &r);
     area = 0.5*sqrt(r.x*r.x+r.y*r.y+r.z*r.z);
     return area;
 }
+
+/** \brief Computes axis-aligned bounding box
+ *
+ * \param[in] m Given mesh
+ * \param[out] minv Minimum point
+ * \param[out] maxv Maximum point
+ * \param[out] center Centre point
+ *
+ */
+void mesh_calc_aabb(MESH m, MESH_VECTOR3 minv, MESH_VECTOR3 maxv, MESH_VECTOR3 center)
+{
+    INTDATA i;
+    const INTDATA nv = m->num_vertices;
+    minv->x = FLT_MAX;
+    minv->y = FLT_MAX;
+    minv->z = FLT_MAX;
+    maxv->x = -FLT_MAX;
+    maxv->y = -FLT_MAX;
+    maxv->z = -FLT_MAX;
+    for(i=0; i<nv; ++i)
+    {
+        const MESH_VERTEX v = m->vertices+i;
+        if(v->x>maxv->x) maxv->x = v->x;
+        if(v->y>maxv->y) maxv->y = v->y;
+        if(v->z>maxv->z) maxv->z = v->z;
+        if(v->x<minv->x) minv->x = v->x;
+        if(v->y<minv->y) minv->y = v->y;
+        if(v->z<minv->z) minv->z = v->z;
+    }
+    center->x = 0.5*(minv->x+maxv->x);
+    center->y = 0.5*(minv->y+maxv->y);
+    center->z = 0.5*(minv->z+maxv->z);
+}
+
+/** \brief Computes signed area of a triangle mesh
+ *
+ * \param[in] m Given mesh
+ * \param[in] area Output area
+ * \return Error code
+ *
+ */
+
+int mesh_calc_signed_area(MESH m, MESH_VECTOR3 area)
+{
+    INTDATA i, nf;
+    MESH_VERTEX mv = m->vertices;
+    area->x = 0.0;
+    area->y = 0.0;
+    area->z = 0.0;
+    if(!m->is_trimesh) return -1;
+    nf = m->num_faces;
+    for(i=0;i<nf; ++i)
+    {
+        INTDATA* cvf = m->faces[i].vertices;
+        mesh_vertex p, q, r;
+        p.x = mv[cvf[0]].x-mv[cvf[1]].x;
+        p.y = mv[cvf[0]].y-mv[cvf[1]].y;
+        p.z = mv[cvf[0]].z-mv[cvf[1]].z;
+        q.x = mv[cvf[0]].x-mv[cvf[2]].x;
+        q.y = mv[cvf[0]].y-mv[cvf[2]].y;
+        q.z = mv[cvf[0]].z-mv[cvf[2]].z;
+        mesh_cross_vector3(&p, &q, &r);
+
+        area->x += r.x;
+        area->y += r.y;
+        area->z += r.z;
+    }
+    return 0;
+}
+
+/** \brief Computes area of a triangle mesh
+ *
+ * \param[in] m Given mesh
+ * \return Area (INF, if not trimesh)
+ *
+ */
+
+FLOATDATA mesh_calc_area(MESH m)
+{
+    INTDATA i, nf;
+    FLOATDATA area = 0.0;
+    if(!m->is_trimesh) return NAN;
+    nf = m->num_faces;
+    MESH_VERTEX mv = m->vertices;
+    for(i=0;i<nf; ++i)
+    {
+        INTDATA* cvf = m->faces[i].vertices;
+        area += mesh_calc_triangle_area(mv+cvf[0], mv+cvf[1], mv+cvf[2]);;
+    }
+    return area;
+}
+
+/** \brief Computes volume of a triangle mesh
+ *
+ * \param[in] m Given mesh
+ * \return Volume (INF, if not trimesh)
+ *
+ */
+
+FLOATDATA mesh_calc_volume(MESH m)
+{
+    INTDATA i, nf;
+    FLOATDATA vol = 0.0;
+    if(!m->is_trimesh) return NAN;
+    nf = m->num_faces;
+    MESH_VERTEX mv = m->vertices;
+    #pragma omp parallel for reduction (+:vol)
+    for(i=0;i<nf; ++i)
+    {
+        INTDATA* cvf = m->faces[i].vertices;
+        mesh_vector3 tmp;
+        mesh_cross_vector3(mv+cvf[1], mv+cvf[2], &tmp);
+        vol += (tmp.x*mv[cvf[0]].x+tmp.y*mv[cvf[0]].y+tmp.z*mv[cvf[0]].z);
+    }
+    vol /=6.0;
+    return vol;
+}
+
+
+
 

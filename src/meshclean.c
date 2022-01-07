@@ -1,9 +1,9 @@
 /**
  * @file meshclean.c
  * @author Sk. Mohammadul Haque
- * @version 1.4.2.0
+ * @version 1.8.0.0
  * @copyright
- * Copyright (c) 2013, 2014, 2015, 2016 Sk. Mohammadul Haque.
+ * Copyright (c) 2013-2021 Sk. Mohammadul Haque.
  * @brief This file contains functions pertaining to different mesh cleaning algorithms.
  */
 
@@ -159,7 +159,7 @@ static int __mesh_remove_boundary_elements(MESH m, int iters, int type)
                     new_faces[j].vertices[0] = m->faces[i].vertices[0];
                     new_faces[j].vertices[1] = m->faces[i].vertices[1];
                     new_faces[j].vertices[2] = m->faces[i].vertices[2];
-				    ++j;
+                    ++j;
                 }
                 free(m->faces[i].vertices);
             }
@@ -339,7 +339,7 @@ int mesh_remove_triangles_with_small_area(MESH m, FLOATDATA area)
                 new_faces[j].vertices[0] = m->faces[i].vertices[0];
                 new_faces[j].vertices[1] = m->faces[i].vertices[1];
                 new_faces[j].vertices[2] = m->faces[i].vertices[2];
-			    ++j;
+                ++j;
             }
             free(m->faces[i].vertices);
         }
@@ -381,10 +381,10 @@ int mesh_remove_triangles_with_small_area(MESH m, FLOATDATA area)
         m->num_faces -= num_deleted;
         free(m->faces);
         m->faces = new_faces;
-        free(fflags);
         mesh_calc_vertex_adjacency(m);
         if(is_ffaces==1) mesh_calc_face_adjacency(m);
     }
+    free(fflags);
     return 0;
 }
 
@@ -415,7 +415,7 @@ int mesh_remove_unreferenced_vertices(MESH m)
     MESH_COLOR new_vcolors = NULL;
     MESH_NORMAL new_vnormals = NULL;
     INTDATA num_valid_flags = 0, i, j;
-    uint8_t is_vfaces, is_edges;
+    uint8_t is_vfaces = 0, is_edges = 0;
     if(m==NULL) return 1;
 
     if((vflags = (signed char *)malloc(sizeof(signed char)*(m->num_vertices)))==NULL) mesh_error(MESH_ERR_MALLOC);
@@ -586,9 +586,9 @@ int mesh_remove_ear_faces(MESH m, int niters)
                     new_faces[j].vertices[0] = m->faces[i].vertices[0];
                     new_faces[j].vertices[1] = m->faces[i].vertices[1];
                     new_faces[j].vertices[2] = m->faces[i].vertices[2];
-					++j;
+                    ++j;
                 }
-               	free(m->faces[i].vertices);
+                free(m->faces[i].vertices);
             }
 
             if(m->is_fcolors)
@@ -719,6 +719,7 @@ int mesh_remove_non_manifold_vertices(MESH m)
     MESH_FACE new_faces = NULL;
     MESH_COLOR new_vcolors = NULL, new_fcolors = NULL;
     MESH_NORMAL new_vnormals = NULL, new_fnormals = NULL;
+    MESH_SCALAR new_vscalars = NULL, new_fscalars = NULL;
     MESH_EDGE me;
     INTDATA mne, mnv;
     INTDATA num_valid_flags = 0, i, j, k;
@@ -777,6 +778,7 @@ int mesh_remove_non_manifold_vertices(MESH m)
         }
 
         if((new_vertices = (MESH_VERTEX)malloc(sizeof(mesh_vertex)*(num_valid_flags)))==NULL) mesh_error(MESH_ERR_MALLOC);
+        #pragma omp parallel for shared(m)
         for(i=0; i<m->num_vertices; ++i)
         {
             if(vflags[i]==1)
@@ -790,6 +792,7 @@ int mesh_remove_non_manifold_vertices(MESH m)
         if(m->is_vcolors)
         {
             if((new_vcolors = (MESH_COLOR)malloc(sizeof(mesh_color)*(num_valid_flags)))==NULL) mesh_error(MESH_ERR_MALLOC);
+            #pragma omp parallel for shared(m)
             for(i=0; i<m->num_vertices; ++i)
             {
                 if(vflags[i]==1)
@@ -807,6 +810,7 @@ int mesh_remove_non_manifold_vertices(MESH m)
         if(m->is_vnormals)
         {
             if((new_vnormals = (MESH_NORMAL)malloc(sizeof(mesh_normal)*(num_valid_flags)))==NULL) mesh_error(MESH_ERR_MALLOC);
+            #pragma omp parallel for shared(m)
             for(i=0; i<m->num_vertices; ++i)
             {
                 if(vflags[i]==1)
@@ -818,6 +822,21 @@ int mesh_remove_non_manifold_vertices(MESH m)
             }
             free(m->vnormals);
             m->vnormals = new_vnormals;
+        }
+
+        if(m->is_vscalars)
+        {
+            if((new_vscalars = (MESH_SCALAR)malloc(sizeof(mesh_scalar)*(num_valid_flags)))==NULL) mesh_error(MESH_ERR_MALLOC);
+            #pragma omp parallel for shared(m)
+            for(i=0; i<m->num_vertices; ++i)
+            {
+                if(vflags[i]==1)
+                {
+                    new_vscalars[vindx[i]] = m->vscalars[i];
+                }
+            }
+            free(m->vscalars);
+            m->vscalars = new_vscalars;
         }
 
         m->num_vertices = num_valid_flags;
@@ -859,7 +878,7 @@ int mesh_remove_non_manifold_vertices(MESH m)
                     {
                         new_faces[k].vertices[j] = vindx[m->faces[i].vertices[j]];
                     }
-					++k;
+                    ++k;
                 }
                 free(cfo->vertices);
             }
@@ -901,6 +920,22 @@ int mesh_remove_non_manifold_vertices(MESH m)
                 }
                 free(m->fnormals);
                 m->fnormals = new_fnormals;
+            }
+
+            if(m->is_vscalars)
+            {
+                if((new_fscalars = (MESH_SCALAR)malloc(sizeof(mesh_scalar)*(num_valid_flags)))==NULL) mesh_error(MESH_ERR_MALLOC);
+                k = 0;
+                for(i=0; i<m->num_faces; ++i)
+                {
+                    if(fflags[i]==1)
+                    {
+                        new_fscalars[k] = m->fscalars[i];
+                        ++k;
+                    }
+                }
+                free(m->fscalars);
+                m->fscalars = new_fscalars;
             }
 
             if(m->is_fareas)

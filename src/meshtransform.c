@@ -1,13 +1,14 @@
 /**
  * @file meshtransform.c
  * @author Sk. Mohammadul Haque
- * @version 1.4.2.0
+ * @version 1.8.0.0
  * @copyright
- * Copyright (c) 2013, 2014, 2015, 2016 Sk. Mohammadul Haque.
+ * Copyright (c) 2013-2021 Sk. Mohammadul Haque.
  * @brief This file contains functions pertaining to different mesh transformations.
  */
 
 #include "../include/meshlib.h"
+#include <math.h>
 
 
 /** \brief Creates a new rotation
@@ -35,6 +36,32 @@ void mesh_rotation_free(MESH_ROTATION r)
     free(r);
 }
 
+
+/** \brief Creates a new affine transformation
+ *
+ * \return Output affine transformation
+ *
+ */
+
+MESH_AFFINE mesh_affine_create()
+{
+    MESH_AFFINE tx;
+    if((tx = (MESH_AFFINE)malloc(sizeof(mesh_affine)))==NULL) mesh_error(MESH_ERR_MALLOC);
+    return tx;
+}
+
+/** \brief Frees a given affine transformation
+ *
+ * \param tx Input affine transformation
+ * \return NULL
+ *
+ */
+
+void mesh_affine_free(MESH_AFFINE tx)
+{
+    free(tx);
+}
+
 /** \brief Sets rotation from a matrix
  *
  * \param[in] mat Input matrix
@@ -48,6 +75,22 @@ MESH_ROTATION mesh_rotation_set_matrix(FLOATDATA *mat, MESH_ROTATION r)
     int k;
     if(r==NULL) r = mesh_rotation_create();
     for(k=0; k<9; ++k) r->data[k] = mat[k];
+    return r;
+}
+
+/** \brief Sets affine transformation from a matrix
+ *
+ * \param[in] mat Input matrix
+ * \param[out] r Input affine transformation
+ * \return Output affine transformation
+ *
+ */
+
+MESH_AFFINE mesh_affine_set_matrix(FLOATDATA *mat, MESH_AFFINE r)
+{
+    int k;
+    if(r==NULL) r = mesh_affine_create();
+    for(k=0; k<12; ++k) r->data[k] = mat[k];
     return r;
 }
 
@@ -193,10 +236,10 @@ MESH_VERTEX mesh_vertex_rotate(MESH_VERTEX v, MESH_ROTATION r)
 int mesh_rotate(MESH m, MESH_ROTATION r)
 {
     INTDATA i;
-    FLOATDATA x, y, z;
     if(m==NULL) return 1;
     for(i=0; i<m->num_vertices; ++i)
     {
+        FLOATDATA x, y, z;
         x = r->data[0]*m->vertices[i].x+r->data[3]*m->vertices[i].y+r->data[6]*m->vertices[i].z;
         y = r->data[1]*m->vertices[i].x+r->data[4]*m->vertices[i].y+r->data[7]*m->vertices[i].z;
         z = r->data[2]*m->vertices[i].x+r->data[5]*m->vertices[i].y+r->data[8]*m->vertices[i].z;
@@ -209,5 +252,77 @@ int mesh_rotate(MESH m, MESH_ROTATION r)
     if(m->is_fnormals) mesh_calc_face_normals(m);
 
     return 0;
+}
+
+/** \brief Transforms a mesh by a given affine transformation
+ *
+ * \param[in] m Input vertex
+ * \param[in] tx Input affine transformation
+ * \return Error code
+ *
+ */
+
+int mesh_transform(MESH m, MESH_AFFINE tx)
+{
+    INTDATA i;
+    if(m==NULL) return 1;
+    for(i=0; i<m->num_vertices; ++i)
+    {
+        FLOATDATA x, y, z;
+        x = tx->data[0]*m->vertices[i].x+tx->data[3]*m->vertices[i].y+tx->data[6]*m->vertices[i].z;
+        y = tx->data[1]*m->vertices[i].x+tx->data[4]*m->vertices[i].y+tx->data[7]*m->vertices[i].z;
+        z = tx->data[2]*m->vertices[i].x+tx->data[5]*m->vertices[i].y+tx->data[8]*m->vertices[i].z;
+
+        m->vertices[i].x = x+tx->data[9];
+        m->vertices[i].y = y+tx->data[10];
+        m->vertices[i].z = z+tx->data[11];
+    }
+    if(m->is_vnormals) mesh_calc_vertex_normals(m);
+    if(m->is_fnormals) mesh_calc_face_normals(m);
+
+    return 0;
+}
+
+/** \brief Sets an affine transformation with rotation and translation
+ *
+ * \param[in] r Input rotation
+ * \param[out] t Input translation
+ * \param[out] tx Input affine transformation
+ * \return Output affine transformation
+ *
+ */
+
+MESH_AFFINE mesh_transform_set_rotation_translation(MESH_ROTATION r, MESH_VECTOR3 t, MESH_AFFINE tx)
+{
+    if(tx==NULL) tx = mesh_affine_create();
+    tx->data[0] = r->data[0];
+    tx->data[1] = r->data[1];
+    tx->data[2] = r->data[2];
+    tx->data[3] = r->data[3];
+    tx->data[4] = r->data[4];
+    tx->data[5] = r->data[5];
+    tx->data[6] = r->data[6];
+    tx->data[7] = r->data[7];
+    tx->data[8] = r->data[8];
+    tx->data[9] = t->x;
+    tx->data[10] = t->y;
+    tx->data[11] = t->z;
+    return tx;
+}
+
+/** \brief Sets an affine transformation with rotation and translation
+ *
+ * \param[in] m1 Input mesh
+ * \param[out] m2 Input mesh to align
+ * \param[in] flags (MESH_ALIGN_GLOBAL_POSITION/MESH_ALIGN_GLOBAL_ORIENTATION/MESH_ALIGN_GLOBAL_SCALE/MESH_ALIGN_GLOBAL_ALL/MESH_ALIGN_GLOBAL_DO_TRANSFORM)
+ * \param[out] tx Output affine transformation, if not null
+ * \return Error code
+ *
+ */
+
+int mesh_align_global(MESH m1, MESH m2, int flags, MESH_AFFINE tx)
+{
+
+    return -1;
 }
 

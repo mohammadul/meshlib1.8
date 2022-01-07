@@ -4,27 +4,27 @@
 101  ICON  "meshlib.ico"
 
 1 VERSIONINFO
-FILEVERSION      1,4,2,0
-PRODUCTVERSION   1,4,2,0
+FILEVERSION      1,8,0,0
+PRODUCTVERSION   1,8,0,0
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
         BLOCK "040904E4" // Lang=US English, CharSet=Windows Multilingual
         BEGIN
-            VALUE "Build",            "September 2016\0"
+            VALUE "Build",            "September 2021\0"
             VALUE "Comments",         "A simple Mesh Library written in C\0"
             VALUE "CompanyName",      "Sk. Mohammadul Haque\0"
             VALUE "Developer",        "Sk. Mohammadul Haque\0"
             VALUE "FileDescription",  "Meshlib\0"
-            VALUE "FileVersion",      "1.4.2\0"
+            VALUE "FileVersion",      "1.8.0\0"
             VALUE "InternalName",     "meshlib.dll\0"
-            VALUE "LegalCopyright",   "Copyright (C) 2013, 2014, 2015, 2016 Sk. Mohammadul Haque\0"
+            VALUE "LegalCopyright",   "Copyright (C) 2013-2021 Sk. Mohammadul Haque\0"
             VALUE "OriginalFilename", "meshlib.dll\0"
             VALUE "PrivateBuild",     "\0"
             VALUE "ProductName",      "MeshLib\0"
-            VALUE "ProductVersion",   "1.4.2\0"
+            VALUE "ProductVersion",   "1.8.0\0"
             VALUE "SpecialBuild",     "\0"
-            VALUE "Support",          "http://www.mohammadulhaque.in\0"
+            VALUE "Support",          "https://www.mohammadulhaque.in\0"
         END
     END
     BLOCK "VarFileInfo"

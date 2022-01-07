@@ -1,9 +1,9 @@
 /**
  * @file meshtext.c
  * @author Sk. Mohammadul Haque
- * @version 1.4.2.0
+ * @version 1.8.0.0
  * @copyright
- * Copyright (c) 2013, 2014, 2015, 2016 Sk. Mohammadul Haque.
+ * Copyright (c) 2013-2021 Sk. Mohammadul Haque.
  * @brief This file contains functions pertaining to different text routines.
  */
 
@@ -147,11 +147,53 @@ int mesh_count_words_in_line(FILEPOINTER fp, int *count)
  * \param[in] fp Pointer to input file
  * \param[out] c_word Variable to store the word
  * \param[in] sz Maximum size to read
- * \return Status 0 - Normal/ 1- EOF
+ * \return Status 0 - Normal/ 1 - EOF / 2 - Overflow
  *
  */
 
 int mesh_read_word(FILEPOINTER fp, char *c_word, int sz)
+{
+    int flag = 0, t = 0;
+    int ch;
+    while((flag<3) && ((ch = getc(fp))!=EOF))/*no need for state 3 to be corrected*/
+    {
+        if ((ch =='\v') || (ch =='\r') || (ch =='\n') || (ch =='\t') || (ch ==' ') || (ch =='\f') || (ch==',') || (ch=='!') || (ch=='(') || (ch==')') || (ch=='{') || (ch=='}') || (ch=='[') || (ch==']'))
+        {
+            if(flag!=0) flag = 2;
+        }
+        else if(flag<2)
+        {
+            flag = 1;
+            c_word[t] = ch;
+            if((t+1)>=sz)
+            {
+                c_word[t+1] = '\0'; /* prevent buffer overflow */
+                ungetc(ch, fp);
+                return 2;
+            }
+            else ++t;
+        }
+        else if(flag==2) flag = 3; /* reached next word */ /*to be corrected for deleting state 3*/
+    }
+    c_word[t] = '\0';
+    if(ch!=EOF)
+    {
+        ungetc(ch, fp);
+        return 0;
+    }
+    else return 1;
+}
+
+/** \brief Reads current word skipping comment with # and moves to the next word
+ *
+ * \param[in] fp Pointer to input file
+ * \param[out] c_word Variable to store the word
+ * \param[in] sz Maximum size to read
+ * \return Status 0 - Normal/ 1- EOF / 2 - Overflow / 3 - Commented
+ *
+ */
+
+int mesh_read_word_skip_comment(FILEPOINTER fp, char *c_word, int sz)
 {
     int flag = 0, t = 0, comment_flag = 0;
     int ch;
@@ -203,16 +245,56 @@ int mesh_read_word(FILEPOINTER fp, char *c_word, int sz)
     else return 1;
 }
 
-/** \brief Reads current word withot moving to the next word
+/** \brief Reads current word without moving to the next word
  *
  * \param[in] fp Pointer to input file
  * \param[out] c_word Variable to store the word
  * \param[in] sz Maximum size to read
- * \return Status 0 - Normal/ 1- EOF
+ * \return Status 0 - Normal/ 1- EOF / 2 - Overflow
  *
  */
 
 int mesh_read_word_only(FILEPOINTER fp, char *c_word, int sz)
+{
+    int flag = 0, t = 0, ch;
+    while((flag<2) && ((ch = getc(fp))!=EOF))/*no need for state 3 to be corrected*/
+    {
+        if ((ch =='\v') || (ch =='\r') || (ch =='\n') || (ch =='\t') || (ch ==' ') || (ch =='\f') || (ch==',') || (ch=='!') || (ch=='(') || (ch==')') || (ch=='{') || (ch=='}') || (ch=='[') || (ch==']'))
+        {
+            if(flag!=0) flag = 2;
+        }
+        else if(flag<2)
+        {
+            flag = 1;
+            c_word[t] = ch;
+            if((t+1)>=sz)
+            {
+                c_word[t+1] = '\0'; /* prevent buffer overflow */
+                ungetc(ch, fp);
+                return 2;
+            }
+            else ++t;
+        }
+    }
+    c_word[t] = '\0';
+    if(ch!=EOF)
+    {
+        ungetc(ch, fp);
+        return 0;
+    }
+    else return 1;
+}
+
+/** \brief Reads current word skipping comment with # without moving to the next word
+ *
+ * \param[in] fp Pointer to input file
+ * \param[out] c_word Variable to store the word
+ * \param[in] sz Maximum size to read
+ * \return Status 0 - Normal/ 1- EOF / 2 - Overflow / 3 - Commented
+ *
+ */
+
+int mesh_read_word_only_skip_comment(FILEPOINTER fp, char *c_word, int sz)
 {
     int flag = 0, t = 0, comment_flag = 0, ch;
     while((flag<2) && ((ch = getc(fp))!=EOF))/*no need for state 3 to be corrected*/
@@ -262,6 +344,7 @@ int mesh_read_word_only(FILEPOINTER fp, char *c_word, int sz)
     else return 1;
 }
 
+
 /** \brief Skips to next line
  *
  * \param[in] fp Pointer to input file
@@ -274,9 +357,19 @@ int mesh_skip_line(FILEPOINTER fp)
     char comment_flag = 1;
     int ch;
     /* skip remaining part of the line */
-    while((comment_flag==1) && ((ch = getc(fp))!=EOF))/*no need for state 3 to be corrected*/
+    while((comment_flag==1) && ((ch = getc(fp))!=EOF)) /*no need for state 3 to be corrected*/
     {
-        if (ch=='\r' || ch=='\n')
+        /* probably fixed below skipping rest of line with \r\n endings (20 Oct 2019) */
+        if(ch=='\r')
+        {
+            comment_flag = 0;
+            long int pos = ftell(fp);
+            if(getc(fp)!='\n')
+            {
+                fseek(fp, pos, SEEK_SET);
+            }
+        }
+        else if(ch=='\n')
         {
             comment_flag = 0;
         }
